@@ -1,0 +1,47 @@
+\begin{frame}
+\frametitle{О чем курс?}
+
+\begin{itemize}
+  \item<1-> Memory Management:
+
+    \begin{itemize}
+      \item различные алгоритмы аллокации (физическая память, виртуальная
+            память, SLOB/SLAB/SLUB?)
+      \item paging (магия page fault, вроде бы fault, а вроде и нет)
+      \item интерфейс ОС для userspace процессов
+    \end{itemize}
+
+  \item<2> Multithreading and Scheduling:
+    \begin{itemize}
+      \item критерии и алгоритмы планирования, переключение тредов
+      \item особенности многоядерных архитектур, когерентность кешей и барьеры
+            памяти
+      \item синхронизация потоков исполнения
+    \end{itemize}
+\end{itemize}
+
+\end{frame}
+
+\begin{frame}
+\frametitle{О чем курс?}
+
+\begin{itemize}
+  \item<1-> Inter Process Communication
+
+  \item<2-> Permanent Storage:
+    \begin{itemize}
+      \item локальные файловые системы (пожалуй самая интересная тема курса, тут
+            мы даже посмотрим на пару нормальных алгоритмов)
+      \item распределенные файловые системы и связанные темы (консенсус, CAP,
+            неразрешимые проблемы и пр.)
+    \end{itemize}
+
+  \item<3> Virtualization:
+    \begin{itemize}
+      \item кому и зачем это нужно
+      \item немного о внутреннем устройстве (trap and emulate)
+    \end{itemize}
+
+\end{itemize}
+
+\end{frame}
