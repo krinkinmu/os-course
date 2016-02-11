@@ -10,6 +10,9 @@ duration_param = (2.4486917249574072, 399004.31314749306, 4145977.1006420013)
 interval_param = (1.1323738333275997, 453.39611575820913, 3727.4636141720862)
 
 def gen_events():
+    def align_up(value, alignment):
+        return alignment * int((value + alignment - 1) / alignment)
+
     interval = dist.rvs(*interval_param, size=EVENTS)
     duration = dist.rvs(*duration_param, size=EVENTS)
     size = dist.rvs(*size_param, size=EVENTS)
@@ -17,7 +20,7 @@ def gen_events():
     allocs = []
     time = 0
     for i in xrange(EVENTS):
-        allocs.append((i, size[i], time, time + duration[i]))
+        allocs.append((i, align_up(size[i], 8), time, time + duration[i]))
         time += interval[i]
 
     return allocs
@@ -36,7 +39,7 @@ def simulate(allocator):
         if a == 'A':
             cookie = allocator.alloc(i, size)
             if cookie:
-                allocated[i] = cookie
+                used[i] = cookie
                 allocs += 1
             else:
                 allocator.stats()
@@ -51,7 +54,7 @@ def simulate(allocator):
             allocs = 0
 
 class NopAllocator:
-    def alloc(self, *args, **kwargs):
+    def alloc(self, i, size, **kwargs):
         pass
     def free(self, *args, **kwargs):
         pass
