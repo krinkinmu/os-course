@@ -8,6 +8,7 @@ import sys
 
 MAX_DURATION=1000000
 BINS=1000
+dist = invgauss
 
 def alloc(used, words):
     def _alloc(used, pid, stamp, addr):
@@ -53,10 +54,11 @@ def read_values(stream):
     return time
 
 data = read_values(sys.stdin)
-params = invgauss.fit(data)
+params = dist.fit(data)
 values, borders = np.histogram(data, BINS, normed=True)
-fitted = invgauss.pdf(borders[:-1], *params)
+fitted = dist.pdf(borders[:-1], *params)
 title('Object lifetime distribution')
 plot(borders[:-1], fitted, 'r')
 plot(borders[:-1], values, 'b')
 savefig('lifetime.eps', format="eps", dpi=1000)
+print 'parameters for', dist.name, params

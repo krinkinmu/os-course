@@ -5,6 +5,7 @@ from pylab import plot, savefig, title
 import numpy as np
 import sys
 
+dist = invgauss
 MAX_SIZE = 2048
 BINS = 128
 
@@ -21,10 +22,11 @@ def read_values(stream):
     return values
 
 data = read_values(sys.stdin)
-params = invgauss.fit(data)
+params = dist.fit(data)
 values, borders = np.histogram(data, BINS, normed=True)
-fitted = invgauss.pdf(borders[:-1], *params)
+fitted = dist.pdf(borders[:-1], *params)
 title('Allocation size distribution')
 plot(borders[:-1], fitted, 'r')
 plot(borders[:-1], values, 'b')
 savefig('allocsize.eps', format="eps", dpi=1000)
+print 'paramters for', dist.name, params
