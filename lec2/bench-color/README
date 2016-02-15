@@ -1,1 +1,1 @@
-perf stats -e cache-misses ./rb
+perf stat -e cache-misses ./rb

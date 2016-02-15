@@ -11,8 +11,12 @@
 struct rb_int_node {
 	struct rb_node node;
 	int value;
-	char dummy[CACHE_LINE_SIZE - sizeof(struct rb_node) - sizeof(int)];
-};
+} __attribute__((aligned(CACHE_LINE_SIZE)));
+
+struct rb_int_node_large {
+	struct rb_int_node node;
+	struct rb_int_node dummy;	
+} __attribute__((aligned(CACHE_LINE_SIZE)));
 
 static struct rb_int_node **alloc_nodes_color(size_t size)
 {
@@ -32,19 +36,17 @@ static void free_nodes_color(struct rb_int_node **nodes, size_t size)
 
 static struct rb_int_node **alloc_nodes(size_t size)
 {
+	struct rb_int_node_large *nodes = calloc(size, sizeof(struct rb_int_node_large));
 	struct rb_int_node **array = calloc(size, sizeof(struct rb_int_node *));
 
-	for (size_t i = 0; i != size; ++i) {
-		array[i] = memalign(512, sizeof(struct rb_int_node));
-		assert(array[i] != 0);
-	}
+	for (size_t i = 0; i != size; ++i)
+		array[i] = &nodes[i].node;
 	return array;
 }
 
 static void free_nodes(struct rb_int_node **nodes, size_t size)
 {
-	for (size_t i = 0; i != size; ++i)
-		free(nodes[i]);
+	free(nodes[0]);
 	free(nodes);
 }
 
