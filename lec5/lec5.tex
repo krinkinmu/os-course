@@ -1,0 +1,46 @@
+\documentclass[12pt]{beamer}
+
+\hypersetup{colorlinks=true,linkcolor = blue}
+\usetheme{Warsaw}
+
+\usepackage[utf8]{inputenc}
+\usepackage[russian,english]{babel}
+\usepackage[T2A]{fontenc}
+
+\usepackage{hyperref}
+\usepackage[final]{listings}
+\usepackage{breakurl}
+\usepackage{cite}
+\usepackage{perpage}
+
+\def\Url\Breaks{\do\/\do-}
+
+\lstset{
+  frame=single,
+  breaklines=true,
+  basicstyle=\small,
+  postbreak=\raisebox{0ex}{\ensuremath{\hookrightarrow\space}},
+  numbers=left
+}
+
+\MakePerPage{footnote}
+
+\title{Operating Systems}
+\subtitle{Threads Synchronization}
+\author{Me}
+\date{\today}
+
+\begin{document}
+
+  \begin{frame}
+    \titlepage
+  \end{frame}
+
+  \input{agenda}
+
+%  \begin{frame}
+%    \bibliography{lec3}{}
+%    \bibliographystyle{apalike}
+%  \end{frame}
+
+\end{document}
