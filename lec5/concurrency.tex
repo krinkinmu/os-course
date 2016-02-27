@@ -429,6 +429,29 @@ void unlock(int i)
 
 \begin{frame}
 \frametitle{Реализация взаимного исключения}
+\framesubtitle{Честность Алгоритма Петтерсона}
+
+Как определить честность? Разделим lock на две части:
+\begin{itemize}
+  \item вход ($D$) - всегда завершается за изместное конечное
+        количество шагов;
+  \item ожидание ($W$) - может потребовать неограниченное количество шагов;
+\end{itemize}
+
+\onslide<2->{Свойство $r$-ограниченного ожидания для двух потоков (0 и 1):
+\begin{itemize}
+  \item если $D_{0}^{k}$ ($k$-ый вход потока 0) предшествует $D_{1}^{j}$
+        ($j$-ому входу потока 1);
+  \item тогда $k$-ая критическая секция потока 0, предшсествует $j+r$-ой
+        критической секции потока 1;
+\end{itemize}}
+
+\onslide<3->{Алгоритм Петерсона не обладает свойством $r$-ограниченного ожидания
+ни для какого $r$.}
+\end{frame}
+
+\begin{frame}
+\frametitle{Реализация взаимного исключения}
 \framesubtitle{Алгоритм Пекарни (Л. Лэмпорт)}
 
 \onslide<1->{Каждый поток при попытке входа выбирает себе число:
@@ -457,7 +480,7 @@ void unlock(int i)
 \begin{columns}[T]
   \begin{column}{.45\linewidth}
     \begin{lstlisting}
-int choosing[N];
+int flag[N];
 int number[N];
 
 int max(void)
@@ -489,13 +512,18 @@ int less(int id0, int n0,
     \begin{lstlisting}
 void lock(int i)
 {
-  choosing[i] = true;
+  flag[i] = true;
   number[i] = max() + 1;
-  choosing[i] = false;
+  flag[i] = false;
 
   for (int j = 0; j != N; ++j) {
-    while (choosing[j]);
-    while (less(j, number[j], i, number[i]));
+    if (j == i)
+      continue;
+
+    while (flag[j]);
+    while (number[j] &&
+           less(j, number[j],
+                i, number[i]));
   }
 }
 
@@ -506,4 +534,20 @@ void unlock(int i)
     \end{lstlisting}
   \end{column}
 \end{columns}
+\end{frame}
+
+\begin{frame}
+\frametitle{Реализация взаимного исключения}
+\framesubtitle{Честность алгоритм Пекарни}
+
+\begin{itemize}
+  \item вход алгоритма пекарни ($D$) состоит из:
+        \begin{itemize}
+          \item выбора нового числа для потока;
+        \end{itemize}
+  \item если $D_{0}^{k}$ предшествует $D_{1}^{j}$, то число выбранное потоком 0
+        на входе $k$, будет меньше числа, выбранного потоком 1 на входе $j$;
+  \item<2-> т. е. поток 0 войдет в $k$-ую критическую секцию раньше, чем поток 1
+        войдет в $j$-ую - $0$-ограниченное ожидание.
+\end{itemize}
 \end{frame}
