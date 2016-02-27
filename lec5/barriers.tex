@@ -146,3 +146,35 @@ void bar(void)
 \end{columns}
 \end{frame}
 
+\begin{frame}
+\frametitle{Когерентность процессорных кешей}
+
+\begin{figure}
+  \only<1>{\centering\includegraphics[height=.6\textheight]{cache-coh0}}
+  \only<2>{\centering\includegraphics[height=.6\textheight]{cache-coh1}}
+  \only<3>{\centering\includegraphics[height=.6\textheight]{cache-coh2}}
+  \only<4>{\centering\includegraphics[height=.6\textheight]{cache-coh3}}
+  \only<5>{\centering\includegraphics[height=.6\textheight]{cache-coh4}}
+  \only<6>{\centering\includegraphics[height=.6\textheight]{cache-coh5}}
+  \only<7>{\centering\includegraphics[height=.6\textheight]{cache-coh6}}
+  \caption{Cache Incoherency}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+\frametitle{Когерентность процессорных кешей}
+
+Кеши должны находиться в согласованном состоянии (быть когерентными):
+\begin{itemize}
+  \item процессоры могут обмениваться сообщениями:
+        \begin{itemize}
+          \item можем считать, что сообщения передаются надежно;
+          \item не можем полагаться на порядок доставки и обработки сообщений;
+        \end{itemize}
+  \item процессоры используют специальный протокол обеспечения когерентности:
+        \begin{itemize}
+          \item наверно, самый широкоизвестный протокол - MESI (есть сомнения,
+                что он используется без модификаций);
+        \end{itemize}
+\end{itemize}
+\end{frame}
