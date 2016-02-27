@@ -1,0 +1,148 @@
+\begin{frame}
+\frametitle{Переупорядочивание}
+
+К сожалению, описанные подходы, как есть, не будут работать...
+\begin{itemize}
+  \item<2-> компилятору \emph{разрешено} переупорядочивать инструкции:
+        \begin{itemize}
+          \item компилятор может делать с кодом все, что угодно, пока
+                наблюдаемое поведение остается неизменным;
+          \item кеширование, удаление "мертвого" кода, спекулятивные записи и
+                чтения и многое другое
+        \end{itemize}
+  \item<3-> процессоры могут использовать оптимизации изменяющие порядок работы
+        с памятью:
+        \begin{itemize}
+          \item store buffer - сохранение данных во временный буффер вместо
+                кеша;
+          \item invalidate queue - отложенный сброс линии кеша;
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Оптимизации компилятора}
+
+Компилятор подбирает оптимальный набор инструкций реализующий заданное
+наблюдаемое поведение (осторожно C и C++):
+\begin{itemize}
+  \item обращения к volatile данным (чтение и запись);
+  \item операции ввода/вывода (printf, scanf и тд).
+\end{itemize}
+
+\onslide<2->{Если компилятору не сообщить, то он не знает:
+\begin{itemize}
+  \item что переменная может модифицироваться в другом потоке;
+  \item что переменную может читать другой поток;
+  \item что порядок обращений к переменным важен;
+\end{itemize}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Барьеры компиялтора}
+
+\begin{itemize}
+  \item Чтобы сообщить компилятору о "побочных" эффектах работы с памятью
+        нужно сделать эту память частью наблюдаемого поведения - использовать
+        ключевое слово volatile;
+        \begin{itemize}
+          \item компилятору запрещено переупорядочивать обращения к volatile
+                данным, \emph{если они разделены точкой следования};
+          \item компиялтор может переупорядочивать доступ к volatile данным с
+                доступом к не volatile данным;
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Барьеры компиялтора}
+
+\begin{columns}[T]
+  \begin{column}{.45\linewidth}
+    \begin{lstlisting}
+struct some_struct {
+  int a, b, c;
+};
+
+struct some_struct * volatile public;
+
+void foo(void)
+{
+  struct some_struct *ptr = alloc_some_struct();
+
+  ptr->a = 1;
+  ptr->b = 2;
+  ptr->c = 3;
+  // need something to prevent
+  // reordering
+  public = ptr;
+}
+    \end{lstlisting}
+  \end{column}
+  \begin{column}{.45\linewidth}
+    \begin{lstlisting}
+void bar(void)
+{
+  while (!public);
+  // and here too
+  assert(public->a == 1);
+  assert(public->b == 2);
+  assert(public->c == 3);
+}
+    \end{lstlisting}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Барьеры компиялтора}
+
+Итого: volatile мало чем помогает, что делать? \\
+Смотреть в документацию компилятора! Например, gcc предлагает
+следующее решение:
+
+\begin{lstlisting}
+#define barrier() asm volatile ("" : : : "memory")
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Барьеры компиялтора}
+
+\begin{columns}[T]
+  \begin{column}{.45\linewidth}
+    \begin{lstlisting}
+struct some_struct {
+  int a, b, c;
+};
+
+#define barrier() asm volatile ("" : : : "memory")
+struct some_struct *public;
+
+void foo(void)
+{
+  struct some_struct *ptr = alloc_some_struct();
+
+  ptr->a = 1;
+  ptr->b = 2;
+  ptr->c = 3;
+  barrier();
+  public = ptr;
+}
+    \end{lstlisting}
+  \end{column}
+  \begin{column}{.45\linewidth}
+    \begin{lstlisting}
+void bar(void)
+{
+  while (!public);
+  barrier();
+  assert(public->a == 1);
+  assert(public->b == 2);
+  assert(public->c == 3);
+}
+    \end{lstlisting}
+  \end{column}
+\end{columns}
+\end{frame}
+
