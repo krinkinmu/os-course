@@ -19,10 +19,10 @@ static inline void set_idt(const struct idt_ptr *ptr)
 { __asm__ volatile ("lidt (%0)" : : "a"(ptr)); }
 
 static inline void local_irq_disable(void)
-{ __asm__ volatile ("cli"); }
+{ __asm__ volatile ("cli" : : : "cc"); }
 
 static inline void local_irq_enable(void)
-{ __asm__ volatile ("sti"); }
+{ __asm__ volatile ("sti" : : : "cc"); }
 
 static inline void irqchip_map(struct irqchip *chip, unsigned offset)
 { if (chip->map) chip->map(offset); }
