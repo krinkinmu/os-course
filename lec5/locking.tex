@@ -1,0 +1,75 @@
+\begin{frame}[fragile]
+\frametitle{Атомарные операции}
+
+\begin{itemize}
+  \item Compare-And-Set атомарные инструкции:
+    \begin{lstlisting}
+int cmpxchg(volatile int *ptr, int old, int new)
+{
+  const int stored = *ptr;
+  if (stored == old)
+    *ptr = new;
+  return stored;
+}
+    \end{lstlisting}
+  \item Пара инструкций Load Linked и Store Conditional:
+    \begin{lstlisting}
+int cpu = INVALID_CPU, *track = 0;
+
+int load_linked(volatile int *ptr)
+{
+  cpu = this_cpu();
+  return *(track = ptr);
+}
+
+int store_conditional(volatile int *ptr, int value)
+{
+  if (track != ptr || cpu != this_cpu())
+    return 0;
+  cpu = INVALID_CPU;
+  track = 0;
+  *ptr = value;
+  return 1;
+}
+    \end{lstlisting}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Атомарные операции}
+
+\begin{itemize}
+  \item Примеры Compare-And-Set инструкций:
+        \begin{itemize}
+          \item \emph{cmpxchg} - архитектура x86 (используйте префикс "lock",
+                чтобы инструкция служила барьером памяти);
+          \item \emph{cas} - архитектура sparc (является барьером);
+        \end{itemize}
+  \item примеры Load Linked и Store Conditional:
+        \begin{itemize}
+          \item \emph{ldrex}/\emph{strex} - архитектура ARM (не являеются
+                барьером - требуют явного барьера перед и после, если нужно);
+          \item \emph{lwarx}/\emph{stwcx} - архитектура PowerPC (не являются
+                барьером - требуют явного барьреа перед и после, если нужно);
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Атомарные операции}
+
+Compare-And-Set операцию можно выразить через пару Load Linked/Store
+Conditional:
+\begin{lstlisting}
+int cmpxchg(volatile int *ptr, int old, int new)
+{
+  do {
+    const int stored = load_linked(ptr);
+
+    if (stored != old)
+      return stored;
+  } while (!store_conditional(ptr, new));
+  return old;
+}
+\end{lstlisting}
+\end{frame}
