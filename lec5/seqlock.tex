@@ -1,0 +1,110 @@
+\begin{frame}
+\frametitle{Ассиметричные Lock-и}
+
+\begin{itemize}
+  \item<1-> Взаимного исключения достаточно, чтобы гарантировать корректность
+        конкурентных программ
+        \begin{itemize}
+          \item<2-> \emph{если вы его правильно реализовали};
+          \item<3-> \emph{если вы его правильно используете};
+          \item<4-> обычно кроме корректности нам еще важна скорость;
+        \end{itemize}
+  \item<5-> взаимное исключение можно оптимизировать под специфичную нагрузку:
+        \begin{itemize}
+          \item Read/Write Lock - читатели могут работать параллельно (писатели
+                ждут);
+        \end{itemize}
+  \item<6-> можно использовать совершенно другие подходы:
+        \begin{itemize}
+          \item атомарный cнепшот (seqlock);
+          \item неблокирующая синхронизация (obstruction/lock/wait free);
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Атомарный снимок}
+
+\begin{itemize}
+  \item<1-> Есть некоторые данные
+        \begin{itemize}
+          \item \emph{не списочная структура}, т. е. просто непрерывный участок
+                в памяти;
+        \end{itemize}
+  \item<2-> параллельное изменение данных не допускается:
+        \begin{itemize}
+          \item чтобы изменить данные нужно захватить Lock;
+          \item модификации данных довольно редкие;
+        \end{itemize}
+  \item<3-> необходимо обеспечить эффективное чтение этих данных:
+        \begin{itemize}
+          \item несколько читателей могут работать параллельно;
+          \item нужно обезопасить читателей от писателей изменяющих данные;
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Атомарный снимок}
+\framesubtitle{Определения и чтение}
+
+\begin{lstlisting}
+struct seqlock {
+    struct spinlock lock;
+    unsigned sequence;
+};
+
+unsigned read_seqbegin(const struct seqlock *seq)
+{
+    unsigned sequence = seq->sequence;
+
+    smp_rmb();
+    return ret & ~1u;
+}
+
+int read_seqretry(const struct seqlock *seq, unsigned sequence)
+{
+    smp_rmb();
+    return (seq->sequence != sequence);
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Атомарный снимок}
+\framesubtitle{Запись}
+
+\begin{lstlisting}
+void write_seqbegin(struct seqlock *seq)
+{
+    lock(&seq->lock);
+    seq->sequence++;
+    smp_wmb();
+}
+
+void write_seqend(struct seqlock *seq)
+{
+   smp_wmb();
+   seq->sequence++;
+   unlock(&seq->lock);
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Атомарный снимок}
+
+\begin{itemize}
+  \item seqlock \emph{при правильном использовании} фактически бесплатен для
+        читателей;
+  \item seqlock не откладывает доступ писателям, пока есть читатели в отличие
+        от Read/Write Lock-ов;
+        \begin{itemize}
+          \item писатель имеет приоритет на читателями, поэтому писателей
+                должно быть мало;
+          \item чем больше структура - тем реже она должна изменяться;
+        \end{itemize}
+  \item почти не пригоден для защиты списочных структур данных - применение
+        очень ограничено;
+\end{itemize}
+\end{frame}

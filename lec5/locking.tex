@@ -1,0 +1,263 @@
+\begin{frame}[fragile]
+\frametitle{Test-And-Set Lock}
+
+Атомарные операции позволяют реализовать взаимное исключение гораздо проще чем
+алгоритмы Петерсона и Лэмпорта (и другие):
+
+\begin{lstlisting}
+#define LOCK_FREE 0
+#define LOCK_HELD 1
+
+struct spinlock {
+    int state;
+};
+
+void lock(struct spinlock *lock)
+{
+    while (cmpxchg(&lock->state, LOCK_FREE, LOCK_HELD) != LOCK_FREE);
+}
+
+void unlock(struct spinlock *lock)
+{
+    cmpxchg(&lock->state, LOCK_HELD, LOCK_FREE);
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Test-And-Set Lock}
+
+Test-And-Set Lock в такой реализации обладает рядом недостатков:
+\begin{itemize}
+  \item<2-> все потоки в цикле пытаются выполнить модификацию обще переменной:
+        \begin{itemize}
+          \item вспомните MESI - писать может только один;
+          \item много бесполезного трафика по системной шине;
+        \end{itemize}
+  \item<3-> в такой реализации мы не можем давать никаких гарантий честности;
+  \item<4-> она не работает (приводит к deadlock-у).
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Test-And-Set Lock}
+
+Рассмотрим следующий сценарий:
+\only<1>{\begin{itemize}
+  \item в ОС запущено несколько приложений, которые используют сеть;
+  \item на компьютере установлена \emph{только одна} сетевая карта;
+        \begin{itemize}
+          \item когда сетевая карта заканчивает обрабатывать запрос - она
+                генерирует прерывание (в современных сетевых устройствах все не
+                так просто);
+          \item обработчик прерывания берет следующий запрос из очереди;
+          \item очередь запросов - общий ресурс;
+	\end{itemize}
+\end{itemize}}
+\only<2->{\begin{enumerate}
+  \item<2-> приложение хочет поставить запрос в очередь - оно захватывает
+         spinlock;
+  \item<3-> сетевая карта обработку запроса - генерирует прерывание;
+  \item<4-> обработчик прерывания должен взять новый запрос из очереди - он
+         пытается захватить spinlock;
+  \item<5-> ... и все - мы в тупике ...
+        \begin{itemize}
+          \item приложение не может освободить spinlock, потому что прерывание
+                прервало его работу;
+          \item обработчик прерывания не может захватить spinlock, потому что он
+                уже захвачен приложением;
+        \end{itemize}
+\end{enumerate}}
+\end{frame}
+
+\begin{frame}
+\frametitle{Test-And-Set Lock}
+
+\begin{itemize}
+  \item<1-> Для Test-And-Set Lock-ов нужно выключать прерывания в начале lock и
+        включать в конце unlock.
+  \item<2-> Если прерывания единственный источник конкурентности (нет
+        многоядерности), то достаточно просто выключить прерывания при входе в
+        критическую секцию, чтобы гарантировать взаимное исключение;
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Test-And-Set Lock}
+
+Уменьшить нагрузку на системную шину можно следующим простым трюком:
+
+\begin{lstlisting}
+#define LOCK_FREE 0
+#define LOCK_HELD 1
+
+struct spinlock {
+    int state;
+};
+
+void lock(struct spinlock *lock)
+{
+    disable_interrupts();
+    while (1) {
+        while (lock->state != LOCK_FREE) /* read only */
+            barrier();
+
+        if (cmpxchg(&lock->state, LOCK_FREE, LOCK_HELD) == LOCK_FREE)
+            break;
+    }
+}
+
+void unlock(struct spinlock *lock)
+{
+    cmpxchg(&lock->state, LOCK_HELD, LOCK_FREE);
+    enable_interrupts();
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Test-And-Set Lock}
+
+Текущая версия Test-And-Set Lock-а:
+\begin{itemize}
+  \item не приводит к deadlock-ам (тут трудно что-то улучшить);
+  \item уменьшает нагрузку на системную шину;
+        \begin{itemize}
+          \item системная шина все еще довольно загружена - можно сделать лучше;
+        \end{itemize}
+  \item все еще не честная\onslide<2>{ - этим и займемся.};
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Ticket Lock}
+
+\begin{lstlisting}
+struct ticketpair {
+    uint16_t users;
+    uint16_t ticket;
+} __attribute__((packed));
+
+struct spinlock {
+    uint16_t users;
+    uint16_t ticket;
+}
+
+void lock(struct spinlock *lock)
+{
+    disable_interrupts();
+    const uint16_t ticket = atomic_add_and_get(&lock->users, 1);
+
+    while (lock->ticket != ticket)
+        barrier();
+    smp_mb(); /* we don't use cmpxchg explicitly */
+}
+
+void unlock(struct spinlock *lock)
+{
+    smp_mb();
+    atomic_add(&lock->ticket, 1);
+    enable_interrupts();
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Ticket Lock}
+
+\begin{itemize}
+  \item Ticket Lock очень прост в реализации и достаточно эффективен;
+  \item честность Ticket Lock-а не должна вызывать вопросов;
+  \item реализация spinlock в Linux Kernel использует Ticket Lock.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{MCS Lock}
+
+Ticket Lock, обычно, хорош на практике, зачем нам еще один Lock?
+\begin{itemize}
+  \item<1-> MCS Lock позволяет уменьшить нагрузку на системную шину до минимума
+        не потеряв при этом в честности;
+  \item<2-> простая и красивая идея (если есть что-то красивое в параллельном
+        программировании, то это MCS Lock):
+        \begin{itemize}
+          \item авторы (John Mellor-Crummey and Michael L. Scott) получили приз
+                Дейкстры в области рспределенных вычислений;
+          \item забавный факт - Дейкстра не первым получил премию Дейкстры...
+        \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{MCS Lock}
+\framesubtitle{Опредления и реализация lock}
+\begin{lstlisting}
+struct mcs_lock {
+    struct mcs_lock *next;
+    int locked;
+};
+
+void lock(struct mcs_lock **lock, struct mcs_lock *self)
+{
+    struct mcs_lock *tail;
+
+    self->next = NULL;
+    self->locked = 1;
+
+    tail = xchg(lock, self); /* cmpxchg without cmp part */
+
+    if (!tail)
+        return; /* there was no one in the queue */
+
+    tail->next = self;
+    barrier();
+    while (self->locked);
+        barrier();
+    smp_mb();
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{MCS Lock}
+\framesubtitle{Опредления и реализация unlock}
+В отличие от других Lock-ов, unlock в MCS Lock менее тривиальная операция чем lock:
+\begin{lstlisting}
+void unlock(struct mcs_lock **lock, struct mcs_lock *self)
+{
+    struct mcs_lock *next = self->next;
+
+    if (!next) {
+         if (cmpxchg(lock, self, NULL) == node)
+             return;
+
+         while ((next = self->next) == NULL)
+             barrier();
+    }
+
+    smp_mb();
+    next->locked = 0;
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{MCS Lock}
+
+\begin{enumerate}
+  \item MCS Lock определенно сложнее Ticket Lock и его интерфейс несколько
+        отличается от привычного
+        \begin{itemize}
+          \item MCS Lock все еще достаточно прост;
+          \item MCS Lock был первым подобным алгоритмом, но не последним - есть
+                варианты с нормальным интерфейсом;
+        \end{itemize}
+  \item MCS Lock хранит всех претендентов в связном списке - честность
+        вопросов не вызывает;
+  \item нагрузка на системную шину минимальна:
+        \begin{itemize}
+          \item каждый ожидающий проверят свое и только свое поле locked;
+        \end{itemize}
+\end{enumerate}
+\end{frame}
