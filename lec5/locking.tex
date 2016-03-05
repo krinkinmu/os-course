@@ -2,7 +2,7 @@
 \frametitle{Test-And-Set Lock}
 
 Атомарные операции позволяют реализовать взаимное исключение гораздо проще чем
-алгоритмы Петерсона и Лэмпорта (и другие):
+алгоритмы Петтерсона и Лэмпорта (и другие):
 
 \begin{lstlisting}
 #define LOCK_FREE 0
@@ -19,7 +19,7 @@ void lock(struct spinlock *lock)
 
 void unlock(struct spinlock *lock)
 {
-    cmpxchg(&lock->state, LOCK_HELD, LOCK_FREE);
+    xchg(&lock->state, LOCK_FREE);
 }
 \end{lstlisting}
 \end{frame}
@@ -109,7 +109,7 @@ void lock(struct spinlock *lock)
 
 void unlock(struct spinlock *lock)
 {
-    cmpxchg(&lock->state, LOCK_HELD, LOCK_FREE);
+    xchg(&lock->state, LOCK_FREE);
     enable_interrupts();
 }
 \end{lstlisting}
@@ -183,7 +183,7 @@ Ticket Lock, обычно, хорош на практике, зачем нам �
         программировании, то это MCS Lock):
         \begin{itemize}
           \item авторы (John Mellor-Crummey and Michael L. Scott) получили приз
-                Дейкстры в области рспределенных вычислений;
+                Дейкстры в области распределенных вычислений;
           \item забавный факт - Дейкстра не первым получил премию Дейкстры...
         \end{itemize}
 \end{itemize}
@@ -205,7 +205,7 @@ void lock(struct mcs_lock **lock, struct mcs_lock *self)
     self->next = NULL;
     self->locked = 1;
 
-    tail = xchg(lock, self); /* cmpxchg without cmp part */
+    tail = xchg(lock, self);
 
     if (!tail)
         return; /* there was no one in the queue */

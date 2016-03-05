@@ -73,3 +73,50 @@ int cmpxchg(volatile int *ptr, int old, int new)
 }
 \end{lstlisting}
 \end{frame}
+
+\begin{frame}
+\frametitle{Другие атомарные операции}
+
+Обычно процессоры вместе с Load Linked/Store Conditional и Compare-And-Set могут
+предоставлять дургие атомарные операции:
+
+\begin{itemize}
+  \item xchg - атомарный обмен значениями, в переменную записывается новое
+        значение, а возвращается старое;
+  \item add/sub/inc/dec - атомарные арифметические операции;
+\end{itemize}
+
+\onslide<2>{Все эти операции можно реализовать используя Compare-And-Set или Load Linked/Store Conditional.}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Дргие атомарные операции}
+
+Реализация xchg через cmpxchg:
+\begin{lstlisting}
+int xchg(volatile int *ptr, int new_value)
+{
+    int old_value;
+
+    do {
+        old_value = *ptr;
+    } while (cmpxchg(ptr, old_value, new_value) != old_value);
+
+    return old_value;
+}
+\end{lstlisting}
+
+Реализация xchg через load\_linked и store\_conditional:
+\begin{lstlisting}
+int xchg(volatile int *ptr, int new_value)
+{
+    int old_value;
+
+    do {
+        old_value = load_linked(ptr);
+    } while (!store_conditional(ptr, new_value));
+
+    return old_value;
+}
+\end{lstlisting}
+\end{frame}
