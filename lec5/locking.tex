@@ -205,6 +205,7 @@ void lock(struct mcs_lock **lock, struct mcs_lock *self)
     self->next = NULL;
     self->locked = 1;
 
+    disable_interrupts();
     tail = xchg(lock, self);
 
     if (!tail)
@@ -228,16 +229,15 @@ void unlock(struct mcs_lock **lock, struct mcs_lock *self)
 {
     struct mcs_lock *next = self->next;
 
-    if (!next) {
-         if (cmpxchg(lock, self, NULL) == node)
-             return;
+    if (cmpxchg(lock, self, NULL) == self)
+         return;
 
-         while ((next = self->next) == NULL)
-             barrier();
-    }
+    while ((next = self->next) == NULL)
+         barrier();
 
-    smp_mb();
     next->locked = 0;
+    smp_mb();
+    enable_interrupts();
 }
 \end{lstlisting}
 \end{frame}
