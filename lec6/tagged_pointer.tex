@@ -1,0 +1,163 @@
+\begin{frame}
+\frametitle{Tagged Pointer}
+
+Не все биты указателя реально используются:
+\begin{itemize}
+  \item например, данные в динамической памяти зачастую аллоцируются выпровнеными на границу $2^i$, где $i$ обычно небольшое число (4-5);
+  \item в x86-64, под адресацию используется только 48 бит, оставшиеся 16 либо 0 либо 1 (канонический адрес);
+  \item мы можем создавать свои собственные "указатели" разного размера (увидим дальше в примере);
+  \item<2-> мы можем использовать эти неиспользуемые биты!
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Tagged Pointer}
+
+\begin{lstlisting}
+typedef std::uint16_t   StackNodePtr;
+typedef std::uint16_t   StackNodeTag;
+typedef std::uint32_t   StackHeadPtr;
+\end{lstlisting}
+
+Заведем свой "внутренний" указатель:
+\begin{itemize}
+  \item StackNodePtr - 16-битное число, которое будет выступать в качестве указателя элемента стека;
+    \begin{itemize}
+      \item что вообще можно адресовать 16-битным числом?
+      \item<2-> все что угодно, если этих объектов не больше чем $2^{16}$
+    \end{itemize}
+  \item<3-> StackNodeTag - 16-битное число, служебная информация, которую мы храним рядом с указателем элемента;
+  \item<4-> StackHeadPtr - объединение StackNodePtr и StackNodeTag в одно 32-битное число.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Tagged Pointer}
+
+Функции для работы с StackNodePtr, StackNodeTag и StackHeadPtr:
+\begin{lstlisting}
+static StackHeadPtr createPtr(StackNodePtr ptr, StackNodeTag tag)
+{ return ptr | ((StackHeadPtr)tag << 16); }
+
+static StackNodePtr getPtr(StackHeadPtr ptr)
+{ return ptr & 0xffff; }
+
+static StackNodeTag getTag(StackHeadPtr ptr)
+{ return ptr >> 16; }
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Tagged Pointer}
+
+\begin{lstlisting}
+struct StackNode {
+    StackNodePtr next;
+    T *data;
+
+    StackNode(T *data = nullptr) : next(0), data(data) { }
+};
+
+StackNode *                     pool;
+std::atomic<StackHeadPtr>       head;
+std::atomic<StackHeadPtr>       free;
+\end{lstlisting}
+
+\begin{itemize}
+  \item Изменим определение полей нашего стека, чтобы они использовали StackHeadPtr и StackNodePtr;
+  \item Чтобы StackNodePtr "указывал" на реальный объект в памяти заведем массив pool
+    \begin{itemize}
+      \item StackNodePtr будет индексом в этом массиве;
+    \end{itemize}
+  \item Для аллоции и освобождения элементов стека динамически используем список free;
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Аллокация узлов стека}
+\begin{lstlisting}
+StackNodePtr allocatePtr()
+{
+    StackHeadPtr head, next;
+    StackNodePtr ptr;
+
+    do {
+        head = free.load(std::memory_order_relaxed);
+        ptr = getPtr(head);
+
+        if (!ptr)
+            continue;
+
+        StackNode *node = getNode(ptr); // &pool[ptr]
+        next = createPtr(node->next, getTag(head) + 1);
+    } while (!free.compare_exchange_strong(head, next));
+
+    return ptr;
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Освобождение узлов стека}
+
+\begin{lstlisting}
+void freePtr(StackNodePtr ptr)
+{
+    StackHeadPtr head, new_head;
+    StackNode *node = getNode(ptr);
+
+    do {
+        head = free.load(std::memory_order_relaxed);
+        node->next = getPtr(head);
+        new_head = createPtr(next, getTag(head) + 1);
+    } while (!free.compare_exchange_strong(head, new_head));
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Реализация push}
+
+\begin{lstlisting}
+template <typename T>
+void Stack<T>::push(T *value)
+{
+        StackHeadPtr old_head, new_head;
+        StackNodePtr ptr = allocatePtr();
+        StackNode *node = getNode(ptr);
+        node->data = value;
+        do {
+                old_head = head.load(std::memory_order_relaxed);
+                new_head = createPtr(ptr, getTag(old_head) + 1);
+                node->next = getPtr(old_head);
+        } while (!head.compare_exchange_strong(old_head, new_head));
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Реализация pop}
+
+\begin{lstlisting}
+template <typename T>
+T *Stack<T>::pop()
+{
+        StackHeadPtr old_head, new_head;
+        StackNodePtr ptr;
+        StackNode *node;
+
+        do {
+                old_head = head.load(std::memory_order_relaxed);
+                ptr = getPtr(old_head);
+                if (!ptr)
+                        return nullptr;
+                node = getNode(ptr);
+                new_head = createPtr(node->next, getTag(old_head) + 1);
+        } while (!head.compare_exchange_strong(old_head, new_head));
+
+        T *data = node->data;
+        freePtr(ptr);
+        return data;
+}
+\end{lstlisting}
+\end{frame}

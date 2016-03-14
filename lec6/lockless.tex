@@ -1,0 +1,179 @@
+\begin{frame}
+\frametitle{Неблокирующая синхронизация}
+
+Зачем нам неблокирующая синхронизация?
+\begin{itemize}
+  \item deadlock-и иногда случаются
+    \begin{itemize}
+      \item возможно ошибка в алгоритме (такое случается, но нам не особо интересно);
+      \item поток исполнения может упасть в критической секции (хотя мы и опирались явно на обратное);
+    \end{itemize}
+  \item инверсия приоритетов:
+    \begin{itemize}
+      \item менее приоритетный поток держит Lock, и не может ее отпустить, потому что ему не дают процессорное время;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Неблокирующая синхронизация}
+
+Можно ли обходиться без Lock-ов?
+\begin{itemize}
+  \item<1> да, конечно, у нас ведь есть cmpxchg - нужно просто вызывать его в правильном порядке;
+  \item<2> все, конечно, не так просто:
+    \begin{itemize}
+      \item правильный порядок не всегда очевиден;
+      \item не каждый порядок можно считать неблокирующим - нам нужно более формальное определение;
+      \item придется решать новые проблемы, которых не было при использовании Lock-ов;
+      \item результат может быть непрактичным (медленным).
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Формальные определения}
+
+\only<1>{\begin{definition}
+Реализация алгоритма/структуры данных obstruction free, если начиная с любого достижимого состояния, любой поток исполнения может завершить
+выполнение задачи за конечное количество шагов, если \emph{все другие потоки остановятся}.
+\end{definition}}
+
+\only<2>{\begin{definition}
+Реализация lock free, если \emph{один из потоков} (не известно какой) гарантированно завершает выполнение своей задачи за конечное число шагов,
+\emph{независимо от других потоков}.
+\end{definition}}
+
+\only<3>{\begin{definition}
+Реализация wait free, если \emph{каждый поток} завершает свою операцию за конечное количество шагов \emph{независимо от других потоков}.
+\end{definition}}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Lock free stack}
+\lstinputlisting[language=C++,firstline=8,lastline=25]{../lockless/stack1.hpp}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Lock free stack}
+\lstinputlisting[language=C++,firstline=36,lastline=46]{../lockless/stack1.hpp}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Lock free stack}
+\lstinputlisting[language=C++,firstline=48,lastline=64]{../lockless/stack1.hpp}
+\end{frame}
+
+\begin{frame}
+\frametitle{Lock free stack}
+
+К сожалению эта реализация:
+\begin{itemize}
+  \item<1-> не obstruction/lock/wait free (возможно);
+    \begin{itemize}
+      \item<2-> чтобы реализация была lock free, она не должна использовать не lock free примитивов как минимум;
+      \item<3-> является ли вызов new lock free?
+    \end{itemize}
+  \item<4-> не корректна впринципе:
+    \begin{itemize}
+      \item<5-> обращается к памяти после освобождения;
+      \item<6-> неправильно использует Compare-And-Set примитив для иснхронизации;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Безопасное освобождение памяти}
+
+\begin{lstlisting}
+node = this->head.load(std::memory_order_relaxed);
+if (!node)
+    return nullptr;
+next = node->next;
+\end{lstlisting}
+Имеем ли мы право разименовывать указатель node?
+\begin{itemize}
+  \item несколько вызовов pop могут выполняться параллельно;
+  \item один из них мог освободить память, после того как мы прочитали node и до того, как мы прочитали node->next;
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Проблема ABA}
+\begin{lstlisting}
+node = this->head.load(std::memory_order_relaxed);
+if (!node)
+    return nullptr;
+next = node->next;
+\end{lstlisting}
+Гораздо более тонкая неприятность:
+\begin{itemize}
+  \item<1-> compare\_exchange\_strong успешен, если значение хранимое в атомарной переменной \emph{побитово совпадает} с ожидаемым значением (это упрощение);
+  \item<2-> нам нужно, чтобы compare\_exchange\_strong был уcпешен, если значение в атомарной перменной \emph{не менялось} с момента, когда мы сделали load (как в LL/SC);
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Проблема ABA}
+
+\begin{itemize}
+  \item У нас есть несколько потоков работающих со стеком параллельно:
+    \begin{itemize}
+      \item Thread0 выполняют операцию pop;
+      \item Thread1 выполняет операцию pop и затем сразу операцю push;
+      \item все остальные потоки каким-то образом модифицируют стек;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Проблема ABA}
+
+\begin{lstlisting}
+node = this->head.load(std::memory_order_relaxed);
+if (!node)
+    return nullptr;
+next = node->next;
+\end{lstlisting}
+
+\begin{itemize}
+  \item Thread0 загрузил голову стека (пусть ее адрес Addr, т. е. node == Addr);
+  \item Thread0 проверил, что она не равна nullptr, т. е. стек не пуст;
+  \item Thread0 запоминает указатель на следующий элемент стека;
+  \item после чего Thread0 был снят с процессора;
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Проблема ABA}
+
+\begin{itemize}
+  \item Thread1 выполняет операцию pop полностью:
+    \begin{itemize}
+      \item удаляет голову стека из списка;
+      \item освобождает память занятую головой списка, т. е. Addr теперь свободный адрес;
+    \end{itemize}
+  \item Thread1 снимается с процессора и управление получают другие потоки, которые изменяют стек;
+  \item Thread1 снова получает управление и выполняет операцию push полностью:
+    \begin{itemize}
+      \item Thread1 должен аллоцировать новую голову стека, в частности Addr - свободный адрес;
+      \item Thread1 добавляет новую голову с адресом Addr в стек;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Проблема ABA}
+
+\begin{lstlisting}
+do {
+    ...
+} while (!this->head.compare_exchange_strong(node, next));
+\end{lstlisting}
+
+\begin{itemize}
+  \item Thread0 вновь получает процессор и продолжает исполнение операции pop;
+  \item Thread0 выполняет compare\_exchage\_strong - операция успешна, потому что после Thread1 адрес головы стека вновь стал Addr;
+  \item<2-> но поле next в голове стека могло измениться!
+\end{itemize}
+\end{frame}

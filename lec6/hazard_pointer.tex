@@ -1,0 +1,201 @@
+\begin{frame}
+\frametitle{Hazard Pointer}
+
+\begin{itemize}
+  \item Tagged Pointer - простая и достаточно эффективная техника, но не универальная;
+  \item Мы должны знать какого размера Tag-а нам точно достаточно:
+    \begin{itemize}
+      \item если поток заснул на долго, то Tag может переполнится и он этого не заметит;
+      \item работа с большим Tag-ом может вообще не быть атомарной;
+    \end{itemize}
+  \item Возьмем Tagged Pointer на вооружение, но поищем альтернативу (тем более, что они есть);
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Hazard Pointer}
+
+Hazard Pointer позволяет отметить указатель, как "небезопасный" и тем самым отложить его освобождение
+\begin{itemize}
+  \item оригинальная статья: "Hazard Pointers: Safe Memory Reclamation for Lock-Free Objects", Maged M. Michael;
+  \item Hazard Pointer популярная универсальная техника, но мы рассмотрим только простую (и не универсальную) реализацию.
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Hazard Pointer}
+
+Основная идея:
+\begin{itemize}
+  \item У каждого потока есть небольшой набор Hazard Pointer-ов, в которые он сохраняет указатели на используемые объекты (которые нельзя удалять);
+  \item Писать в Hazard Pointer может только поток-владелец, но читать могут все;
+  \item Перед тем как освобождать память проверим все Hazard Pointer-ы вех потоков.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Hazard Pointer}
+
+Перед тем как рассмотреть реализацию, посмотрим как мы будем ее использовать, начнем с простого - реализация push:
+
+\begin{lstlisting}
+template <typename T>
+void Stack<T>::push(T *value)
+{
+        StackNode *node = new StackNode(value);
+        StackNode *expected;
+
+        do {
+                expected = this->head.load(std::memory_order_relaxed);
+                node->next = expected;
+        } while (!this->head.compare_exchange_strong(expected, node));
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Hazard Pointer}
+
+Тепрь реаизация pop:
+\begin{lstlisting}
+template <typename T>
+T *Stack<T>::pop()
+{
+        HazardPtr<StackNode> hp(acquireRawHazardPtr(0));
+        StackNode *node;
+        StackNode *next;
+
+        do {
+                node = head.load();
+                do {
+                        if (!node)
+                                return nullptr;
+                        hp.set(node);
+                } while ((node = head.load()) != hp.get());
+
+                next = node->next;
+        } while (!head.compare_exchange_strong(node, next));
+
+        hp.set(nullptr);
+        T *data = node->data;
+        releasePtr(node);
+        return data;
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Hazard Pointer}
+Наша реализация будет очень простой потому что мы допустим несколько упрощений:
+\begin{itemize}
+  \item максимальное количество потоков нам известно заранее;
+    \begin{itemize}
+      \item полноценная реализация должна учитывать, что потоки могут создаваться и завершаться;
+    \end{itemize}
+  \item максимальное количество Hazard Pointer-ов на один поток нам известно заранее
+    \begin{itemize}
+      \item обычно потокам не нужно много Hazard Pointer-ов одновременно (3-4), поэтому это довольно слабое ограничение;
+    \end{itemize}
+  \item другими словами, мы можем статически аллоцировать все Hazard Pointer-ы.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Hazard Pointer}
+\begin{lstlisting}
+static const std::size_t MAX_THREAD_COUNT = 1024;
+static const std::size_t MAX_THREADPTR_COUNT = 16;
+static const std::size_t MAX_HAZARD_COUNT = MAX_THREAD_COUNT * MAX_THREADPTR_COUNT;
+
+typedef void * raw_ptr_t;
+static std::atomic<raw_ptr_t> hazard[MAX_HAZARD_COUNT];
+
+std::atomic<raw_ptr_t> *acquireRawHazardPtr(int idx)
+{
+    assert(idx < MAX_THREADPTR_COUNT);
+    const int tid = getThreadId();
+    return &hazard[tid * MAX_THREADPTR_COUNT + idx];
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item Hazard Pointer - глобальный атомарный указатель
+    \begin{itemize}
+      \item каждый поток может получить один из своих Hazard Pointer-ов по индексу (спасибо нашему упрощению);
+      \item чтобы обезопасить указатель нужно сохранить его в атомарный указатель;
+      \item когда вы закончите работать с указателем запишите туда 0;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Hazard Pointer}
+
+\begin{lstlisting}
+void releaseRawPtr(raw_ptr_t ptr, std::function<void(raw_ptr_t)> deleter)
+{
+    static thread_local std::vector<RetireNode> retireList;
+    static const size_t RETIRE_THRESHOLD = 10; // should be much bigger
+
+    RetireNode node = { deleter, ptr };
+    retireList.push_back(node);
+    if (retireList.size() > RETIRE_THRESHOLD)
+        collectGarbage(retireList);
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item Каждый поток поддерживает список ожидающих удаления элементов;
+  \item Если список стал слишком большим - запускаем сборку "мусора";
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Hazard Pointer}
+
+\begin{lstlisting}
+static void collectGarbage(std::vector<RetireNode> &retireList)
+{
+        std::set<raw_ptr_t> plist;
+        for (std::size_t i = 0; i != MAX_HAZARD_COUNT; ++i) {
+                raw_ptr_t ptr = hazard[i].load();
+
+                if (ptr != nullptr)
+                        plist.insert(ptr);
+        }
+
+        std::vector<RetireNode> retire;
+        retire.swap(retireList);
+        for (std::size_t i = 0; i != retire.size(); ++i) {
+                if (plist.count(retire[i].ptr))
+                        retireList.push_back(retire[i]);
+                else
+                        retire[i].deleter(retire[i].ptr);
+        }
+}
+\end{lstlisting}
+
+\begin{itemize}
+  \item Для каждого элемента в списке проверим, защищен ли он Hazard Pointer-ом:
+    \begin{itemize}
+      \item если да, то вернем указатель назад в список ожидания;
+      \item если нет, то его можно безопасно удалять;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Финальные замечания}
+
+\begin{itemize}
+  \item Lockless алгоритмы не редко трудны для реализации и понимания
+    \begin{itemize}
+      \item используйте Lock-и по умолчанию, и Lockless, когда Lock-и стали проблемой;
+    \end{itemize}
+  \item Lockless алгоритмы не производительнее и не масштабируются лучше чем Lock-based:
+    \begin{itemize}
+      \item Lockless алгоритмы предоставляют гарантии прогресса, а не производительности;
+      \item на производительности и масштабируемости в первую очередь сказывается конкуренция за общие ресурсы;
+    \end{itemize}
+\end{itemize}
+\end{frame}

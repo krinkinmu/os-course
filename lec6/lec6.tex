@@ -1,0 +1,51 @@
+\documentclass[12pt]{beamer}
+
+\hypersetup{colorlinks=true,linkcolor = blue}
+\usetheme{Warsaw}
+
+\usepackage[utf8]{inputenc}
+\usepackage[russian,english]{babel}
+\usepackage[T2A]{fontenc}
+
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{breakurl}
+\usepackage{color}
+\usepackage{cite}
+\usepackage{perpage}
+
+\def\Url\Breaks{\do\/\do-}
+\definecolor{hlcode}{gray}{.8}
+
+\lstset{
+  frame=single,
+  breaklines=true,
+  basicstyle=\tiny,
+  postbreak=\raisebox{0ex}{\ensuremath{\hookrightarrow\space}},
+  numbers=left
+}
+
+\MakePerPage{footnote}
+
+\title{Operating Systems}
+\subtitle{Advanced Synchronization}
+\author{Me}
+\date{\today}
+
+\begin{document}
+
+  \begin{frame}
+    \titlepage
+  \end{frame}
+
+  \input{agenda}
+  \input{lockless}
+  \input{tagged_pointer}
+  \input{hazard_pointer}
+
+%  \begin{frame}
+%    \bibliography{lec3}{}
+%    \bibliographystyle{apalike}
+%  \end{frame}
+
+\end{document}
