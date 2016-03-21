@@ -1,0 +1,44 @@
+\begin{frame}
+\frametitle{Создание процессов}
+
+\begin{itemize}
+  \item<1-> Способ создания процессов зависит от ОС:
+    \begin{itemize}
+      \item Windows использует CreateProcess (есть еще NtCreateProcess и ZwCreateProcess);
+      \item UNIX-like ОС используют fork (мы тоже будем использовать его):
+    \end{itemize}
+  \item<2-> fork - создает почти точную копию процесса вызвавшего fork
+    \begin{itemize}
+      \item идентичная память (у каждого своя копия - не общая);
+      \item файловые дескрипторы;
+      \item процессы образуют дерево.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Создание процессов}
+\lstinputlisting[language=C++]{../ipc/fork.c}
+\end{frame}
+
+\begin{frame}
+\frametitle{Завершение процессов}
+
+\begin{itemize}
+  \item<1-> В завершении процесса, как и в создании, участвуют двое:
+    \begin{itemize}
+      \item завершающийся процесс, вызывает exit или \_exit;
+      \item процесс дожидающийся завершения вызывает wait или waitpid.
+    \end{itemize}
+  \item<2-> Чтобы удалить процесс из системы родитель должен вызывать wait:
+    \begin{itemize}
+      \item до тех пор, пока не вызван wait, завершившийся процесс находится в состоянии "zombie";
+      \item если родитель умер раньше ребенка, то ребенка усыновит/удочерит другой процесс системы (например, init);
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Завершение процессов}
+\lstinputlisting[language=C++]{../ipc/wait.c}
+\end{frame}

@@ -1,0 +1,54 @@
+\begin{frame}
+\frametitle{Каналы (a. k. a. Pipes)}
+
+\begin{itemize}
+  \item<1-> Сигналы и коды возврата не позволяют передавать данные
+    \begin{itemize}
+      \item в отсуствие общей памяти, это может стать проблемой;
+    \end{itemize}
+  \item<2-> Чтобы передавать данные между процессами есть множество способов:
+    \begin{itemize}
+      \item каналы или pipes должны быть вам уже хорошо известны;
+      \item вы можете создать участок общей памяти;
+      \item вы можете использовать сокеты;
+      \item вы можете использовать файлы (хотя это очень не удобно);
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Pipes}
+
+\begin{itemize}
+  \item Pipe - это пара файловых дескрипторов:
+    \begin{itemize}
+      \item в один дескриптор можно писать поток байт;
+      \item из другого млжно читать (очевидно, то что было записано в первый);
+      \item pipe имеет ограниченный буффер;
+      \item pipe не сохраняет границы сообщений (по-умолчанию);
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Pipes}
+\lstinputlisting[language=C++]{../ipc/pipe.c}
+\end{frame}
+
+\begin{frame}
+\frametitle{Named pipes}
+
+\begin{itemize}
+  \item<1-> Pipe можно сделать перманентным:
+    \begin{itemize}
+      \item для этого существует вызов mkfifo;
+      \item кроме того есть команда mkfifo (можно вызвать из bash);
+    \end{itemize}
+  \item<2-> Именованный канал выглядит почти как обычный файл:
+    \begin{itemize}
+      \item в отличие от файла, чтение из канала удаляет данные;
+      \item смещение в канале не имеет смысла (seek не работает);
+      \item именованный канал не хранит данные на диске;
+    \end{itemize}
+\end{itemize}
+\end{frame}

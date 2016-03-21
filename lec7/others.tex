@@ -1,0 +1,20 @@
+\begin{frame}
+\frametitle{Другие виды IPC}
+
+\begin{itemize}
+  \item<1-> Есть другие классические UNIX-овые IPC:
+    \begin{itemize}
+      \item семафоры - позволяют реализовать взаимное исключение;
+      \item очереди сообщений - как pipe-ы, но сохраняют границы сообщений + сообщения имеют "тип";
+      \item файловые блокировки - позволяют защитить доступ к файлу или его участкам;
+    \end{itemize}
+  \item<2-> Есть и не классические и не UNIX-овые варианты:
+    \begin{itemize}
+      \item Windows Mailslots и Windows RPC;
+    \end{itemize}
+  \item<3-> Есть целые библиотеки обмена сообщениями между процессами:
+    \begin{itemize}
+      \item ZeroMQ, RabbitMQ;
+    \end{itemize}
+\end{itemize}
+\end{frame}

@@ -1,0 +1,62 @@
+\begin{frame}
+\frametitle{Process Trace}
+
+\begin{itemize}
+  \item<1-> Process Trace - не совсем IPC:
+    \begin{itemize}
+      \item он позволяет передавать информацию из одного процесса в другой;
+      \item<2-> совершенно всю информацию - даже ту, которую процесс и не собирался передавать;
+    \end{itemize}
+  \item<3-> Зачем нам нужен механизм, который раскрывает все внутренности процесса?
+    \begin{itemize}
+      \item<4-> системный вызов ptrace существует для дебага.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Process Trace}
+
+\begin{itemize}
+  \item Вызов ptrace позволяет:
+    \begin{itemize}
+      \item читать память процесса и состояние его регистров;
+      \item писать в память процесса или изменить значения регистров;
+      \item заставить останавливаться поток исполнения:
+        \begin{itemize}
+          \item на входе/выходе в/из syscall-а;
+          \item после каждой инструкции;
+        \end{itemize}
+    \end{itemize}
+  \item Но предварительно к процессу нужно подключиться:
+    \begin{itemize}
+      \item мы можем подключиться к процессам, которые сами создали;
+      \item для подключения к другим процессам нужны привелегии (обычно);
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Пример: отслеживаем системные вызовы}
+
+\begin{itemize}
+  \item Попытаемся отследить системные вызовы, которые выполняет программа
+    \begin{itemize}
+      \item для этого мы запустим процесс и подключимся к нему;
+      \item попросим процесс оснавливаться на каждый системный вызов;
+      \item на входе в системный вызов номер вызова хранится в регистре rax (x86-64 only);
+    \end{itemize}
+  \item Все это делается через один единственный вызов ptrace с разными параметрами;
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Пример: отслеживаем системные вызовы}
+\lstinputlisting[language=C++,firstline=14,lastline=27]{../ipc/trace.c}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Пример: отслеживаем системные вызовы}
+\lstinputlisting[language=C++,firstline=29,lastline=50]{../ipc/trace.c}
+\end{frame}
+

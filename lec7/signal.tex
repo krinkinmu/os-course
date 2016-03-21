@@ -1,0 +1,84 @@
+\begin{frame}
+\frametitle{Сигналы}
+
+\begin{itemize}
+  \item<1-> Сигналы - сообщения о каких-либо исключительных событиях (как правило):
+    \begin{itemize}
+      \item SIGSEGV - segmentation fault (не очень оно исклчительное);
+      \item SIGCHLD - статус дочернего процесса изменился;
+      \item SIGTERM и SIGKILL - процессу пора на покой;
+    \end{itemize}
+  \item<2-> обработчики сигналов асинхронны по отношению к основному коду:
+    \begin{itemize}
+      \item в этом смысле они очень походи на прерывания;
+      \item в отличие от прерываний их можно сделать синхронными;
+    \end{itemize}
+  \item<3-> не все сигналы можно обработать или проигнорировать:
+    \begin{itemize}
+      \item SIGTERM можно перехватить, а SIGKILL нельзя.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Пример обработчика сигналов}
+\lstinputlisting[language=C++]{../ipc/alive.c}
+\end{frame}
+
+\begin{frame}
+\frametitle{Сигналы и конкурентность}
+
+\begin{itemize}
+  \item<1-> Как и прерывания, асинхронные сигналы являются источником конкуренции:
+    \begin{itemize}
+      \item обработчик сигнала может прервать исполнение кода;
+      \item код может быть не готов к тому, что его прервут;
+    \end{itemize}
+  \item<2-> На обработчики сигналов налагаются ограничения:
+    \begin{itemize}
+      \item например, в обработчике сигнала нельзя вызывать функцию printf;
+      \item многие функции стандартной библиотеки могут быть не "signal-safe";
+      \item создавать "signal-safe" функции возможно.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Маскировка сигналов}
+\lstinputlisting[language=C++]{../ipc/block.c}
+\end{frame}
+
+\begin{frame}
+\frametitle{Синхронная обработка сигналов}
+
+\begin{itemize}
+  \item<1-> Можно погрузить поток в сон в ожидании сигнала:
+    \begin{itemize}
+      \item sigwait или sigwaitinfo позволяют дождаться нужных сигналов;
+      \item в многопоточных программах, не редко, создают поток для обработки сигналов:
+        \begin{itemize}
+          \item при старте процесса все сигналы блокируются;
+          \item выделеный поток с помощью sigwait/sigwaitinfo ожидает сигналов и нотифицирует другие потоки, если нужно;
+        \end{itemize}
+    \end{itemize}
+  \item<2-> В Linux есть специальный системный вызов signalfd:
+    \begin{itemize}
+      \item создает фиктивный файловый дескриптор, из которого можно "читать" сигналы;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Сигналы и IPC}
+
+Процессы могут посылать сигналы дургим процессам:
+\begin{itemize}
+  \item SIGKILL, SIGTERM - чтобы "попросить" их умереть;
+  \item SIGUSR1 и SIGUSR2 - специальные сигналы, выделенные под нужды приложений.
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Отправка сигналов}
+\lstinputlisting[language=C++]{../ipc/kill.c}
+\end{frame}
