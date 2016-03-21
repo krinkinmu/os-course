@@ -50,11 +50,12 @@ static void i8254_set_frequency(unsigned long freq)
 	out8(I8254_CH0_DATA_PORT, (divisor & BITS(15, 8)) >> 8);
 }
 
+unsigned long long jiffies;
+
 static void i8254_interrupt_handler(int irq)
 {
 	(void) irq;
-
-	puts("tick");
+	++jiffies;
 }
 
 void setup_time(void)
