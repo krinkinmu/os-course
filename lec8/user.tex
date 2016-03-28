@@ -1,0 +1,85 @@
+\begin{frame}
+\frametitle{Файловая система}
+\begin{itemize}
+  \item<1-> Файловая система - иерархическая организация чего-либо в файлы и каталоги:
+    \begin{itemize}
+      \item файл - последовательность байт;
+      \item каталог - набор файлов и других каталогов;
+    \end{itemize}
+  \item<2-> Файл - удобная абстракция:
+    \begin{itemize}
+      \item чтение/запись последовательности байт очень универасльный интерфейс:
+        \begin{itemize}
+          \item работа с сокетом - чтение/запись последовательности байт;
+          \item устройства могут быть представлены как файлы (/dev/ttyACM0, /dev/input/mouse);
+          \item порции данных на диске могут быть организованы в файлы;
+          \item UNIX - все есть файл.
+        \end{itemize}
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Типичный интерфейс файловой системы}
+\begin{itemize}
+  \item open/create - открытие и создание файла;
+  \item read/write/seek - чтение/запись/позиционирование файла;
+  \item close - закрытие файла;
+  \item link/unlink - создание и удаление жесткой ссылки на файл;
+  \item mkdir - создание каталога;
+  \item opendir - открытие каталога;
+  \item readdir - чтение содержимого каталога;
+  \item closedir - закрытие каталога;
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Расширенный интерфейс файловой системы}
+\begin{itemize}
+  \item Зачастую современные ФС предоставляют много других возможностей:
+    \begin{itemize}
+      \item truncate - задание размера файла и punch hole;
+      \item дефрагментация - переупорядочивание содержимого файлов на диске;
+      \item шифрование;
+      \item списки контроля доступа;
+      \item RAID;
+      \item и многое другое...
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Файловый дескриптор}
+\begin{itemize}
+  \item<1-> В UNIX есть два понятия: File Descript\emph{or} и File Descript\emph{ion}:
+    \begin{itemize}
+      \item File Descript\emph{or} с точки зрения программиста - просто число идентифицирующее открытый файл;
+      \item можете смотреть на него как на индекс в таблице открытых файлов процесса;
+      \item дескриптор имеет смысл только в рамках процесса;
+    \end{itemize}
+  \item<2-> File Descript\emph{or} - это ссылка на File Descript\emph{ion}:
+    \begin{itemize}
+      \item десриптор у каждого процесса свой, но они могут ссылаться на один и тот же открытый файл;
+      \item File Descript\emph{ion} в частности хранить текущее смещение в файле - могут быть неприятности после fork;
+      \item чтобы создать новый File Descript\emph{ion} нужно заново открыть файл.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Задача файловой системы}
+\begin{itemize}
+  \item<1-> Основная задача ФС сопоставить имени файла и смещению в файле смещение на диске
+    \begin{itemize}
+      \item ФС должна поддерживать информацию о свободном/занятом месте на диске и выделять/освобождать место по требованию;
+      \item ничего не напоминает?
+    \end{itemize}
+  \item<2-> ФС - это еще один аллокатор, но со своей спецификой:
+    \begin{itemize}
+      \item все запросы к диску тоже проходят через ФС;
+      \item мы не можем полагаться на надежность процессов;
+      \item алоцированное место не неперывно на диске;
+      \item от ФС часто ожидают надежного хранения;
+    \end{itemize}
+\end{itemize}
+\end{frame}
