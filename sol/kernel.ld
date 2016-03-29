@@ -27,7 +27,7 @@ SECTIONS
 	bss_phys_begin = . - VIRTUAL_BASE;
 	bss_virt_begin = .;
 	.bss : {
-		. += 4 * PAGE_SIZE;
+		. += 6 * PAGE_SIZE;
 		*(.bss)
 	}
 	bss_phys_end = . - VIRTUAL_BASE;
