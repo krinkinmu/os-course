@@ -38,7 +38,11 @@ unsigned long strtoul(const char *str, char **endptr, int base)
 		base = 10;
 
 	while ((pos = strchr(digits, tolower(*str)))) {
-		answer = answer * base + (pos - digits);
+		const int val = pos - digits;
+
+		if (val >= base)
+			break;
+		answer = answer * base + val;
 		++str;
 	}
 

@@ -257,7 +257,7 @@ void vsinkprintf(struct vsinkprintf_sink *sink, const char *fmt, va_list args)
 		case FT_CHAR: {
 			char c = va_arg(args, int);
 
-			vsinkprintf_repeat(sink, ' ', MAX(spec.width, 0));
+			vsinkprintf_repeat(sink, ' ', MAX(spec.width - 1, 0));
 			vsinkprintf_putchar(sink, c);
 			break;
 		}
