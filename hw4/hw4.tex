@@ -1,0 +1,45 @@
+\documentclass[12pt,a4paper,oneside]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[russian,english]{babel}
+\usepackage[T2A]{fontenc}
+
+\usepackage{hyperref}
+\usepackage[final]{listings}
+\usepackage{breakurl}
+\usepackage{cite}
+\usepackage{perpage}
+
+\usepackage[dvips]{graphicx}
+\graphicspath{{img/}}
+
+\def\UrlBreaks{\do\/\do-}
+
+\lstset{
+  frame=single,
+  breaklines=true,
+  basicstyle=\small,
+  postbreak=\raisebox{0ex}{\ensuremath{\hookrightarrow\space}},
+  numbers=left
+}
+
+\renewcommand{\thefigure}{\thesection.\arabic{figure}}
+\MakePerPage{footnote}
+
+\title{Домашнее задание 4. \\ Файловые системы}
+\author{Я}
+\date{\today}
+
+\begin{document}
+  \sloppy
+  \maketitle
+  \tableofcontents
+  \clearpage
+
+  \input{task}
+  \input{initramfs}
+  \input{qa}
+
+  %\bibliography{hw4}{}
+  %\bibliographystyle{apalike}
+\end{document}
