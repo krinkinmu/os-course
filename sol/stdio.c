@@ -102,3 +102,37 @@ int snprintf(char *buf, size_t size, const char *fmt, ...)
 
 	return ret;
 }
+
+#include "threads.h"
+
+static const char *severity_str(enum severity sev)
+{
+	switch (sev) {
+	case INF:
+		return "INF";
+	case WRN:
+		return "WRN";
+	case ERR:
+		return "ERR";
+	default:
+		DBG_ASSERT(0 && "Unreachable");
+	}
+	return "";
+}
+
+void dbg_printf(enum severity sev, const char *file, int line,
+			const char *fmt, ...)
+{
+	static int cnt;
+	va_list args;
+
+	const bool enabled = local_preempt_save();
+
+	va_start(args, fmt);
+	printf("[%s:%d] %s:%d ", severity_str(sev), cnt++, file, line);
+	vprintf(fmt, args);
+	putchar('\n');
+	va_end(args);
+
+	local_preempt_restore(enabled);
+}

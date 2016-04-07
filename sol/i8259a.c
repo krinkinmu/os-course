@@ -1,4 +1,5 @@
 #include "interrupt.h"
+#include "irqchip.h"
 #include "ioport.h"
 
 #define PIC_MASTER_CMD_PORT  0x20
@@ -61,7 +62,7 @@ static void pic_eoi(unsigned irq)
 	}
 }
 
-struct irqchip i8259a = {
+const struct irqchip i8259a = {
 	.map = &pic_remap,
 	.mask = &pic_mask,
 	.unmask = &pic_unmask,

@@ -54,6 +54,24 @@ common_handler:
 	addq $136, %rsp
 	iretq
 
+	.global __thread_entry
+	.extern thread_entry
+__thread_entry:
+	movq %r15, %rdi
+	movq %r14, %rsi
+	movq %r13, %rdx
+
+	cld
+	call thread_entry
+
+	.global __jump_to_userspace
+__jump_to_userspace:
+	RESTORE_VOLATILE
+	RESTORE_NONVOLATILE
+	addq $136, %rsp
+	iretq
+
+
 #define ENTRY_NAME(nr) entry ## nr
 
 #define ISR(nr) \

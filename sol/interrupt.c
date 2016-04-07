@@ -1,9 +1,12 @@
 #include "thread_regs.h"
 #include "interrupt.h"
 #include "backtrace.h"
+#include "threads.h"
+#include "irqchip.h"
 #include "memory.h"
 #include "string.h"
 #include "stdio.h"
+#include "error.h"
 
 #include <stdint.h>
 
@@ -13,13 +16,19 @@
 #define IDT_USER       ((uint64_t)3 << 45)
 #define IDT_IRQS       16
 #define IDT_EXCEPTIONS 32
-#define IDT_SIZE       (IDT_EXCEPTIONS + IDT_IRQS)
+#define IDT_SIZE       (IDT_IRQS + IDT_EXCEPTIONS)
 
 
 struct idt_entry {
 	uint64_t low;
 	uint64_t high;
 } __attribute__((packed));
+
+struct idt_ptr {
+	uint16_t size;
+	uint64_t base;
+} __attribute__((packed));
+
 
 typedef void (*raw_isr_entry_t)(void);
 extern raw_isr_entry_t isr_entry[];
@@ -29,7 +38,7 @@ static struct idt_entry idt[IDT_SIZE];
 static struct idt_ptr idt_ptr;
 static irq_t handler[IDT_IRQS];
 static int irqmask_count[IDT_IRQS];
-static struct irqchip *irqchip;
+static const struct irqchip *irqchip;
 
 
 static void __setup_idt_entry(struct idt_entry *entry, unsigned short cs,
@@ -58,32 +67,41 @@ static void setup_irq(raw_isr_entry_t isr, int no)
 	setup_idt_entry(no, KERNEL_CODE, (unsigned long)isr, IDT_64INT);
 }
 
+static void set_idt(const struct idt_ptr *ptr)
+{ __asm__ volatile ("lidt (%0)" : : "a"(ptr)); }
+
 static void dump_error_frame(const struct thread_regs *frame)
 {
-	printf("exception %ld (%ld) at %#lx:%#lx\n",
-		frame->intno, frame->error, frame->cs, frame->rip);
-
+	printf("exception %ld (%ld) at %#lx:%#lx\n", frame->intno, frame->error,
+				frame->cs, frame->rip);
 	puts("register state:");
-	printf("\tstack %lx:%lx, rflags %#lx\n",
-		frame->ss, frame->rsp, frame->rflags);
-	printf("\trax %#lx, rbx %#lx, rcx %#lx, rdx %#lx\n",
-		frame->rax, frame->rbx, frame->rcx, frame->rdx);
-	printf("\trbp %#lx, rdi %#lx, rsi %#lx\n",
-		frame->rbp, frame->rdi, frame->rsi);
-	printf("\tr8 %#lx, r9 %#lx, r10 %#lx, r11 %#lx\n",
-		frame->r8, frame->r9, frame->r10, frame->r11);
-	printf("\tr12 %#lx, r13 %#lx, r14 %#lx, r15 %#lx\n",
-		frame->r12, frame->r13, frame->r14, frame->r15);
-
-	extern char init_stack_bottom[];
-	extern char init_stack_top[];
-	
-	puts("backtrace:");
-	backtrace(frame->rbp, (uintptr_t)init_stack_bottom,
-		(uintptr_t)init_stack_top);
+	printf("\tstack %lx:%lx, rflags %#lx\n", frame->ss, frame->rsp,
+				frame->rflags);
+	printf("\trax %#lx, rbx %#lx, rcx %#lx, rdx %#lx\n", frame->rax,
+				frame->rbx, frame->rcx, frame->rdx);
+	printf("\trbp %#lx, rdi %#lx, rsi %#lx\n", frame->rbp, frame->rdi,
+				frame->rsi);
+	printf("\tr8 %#lx, r9 %#lx, r10 %#lx, r11 %#lx\n", frame->r8, frame->r9,
+				frame->r10, frame->r11);
+	printf("\tr12 %#lx, r13 %#lx, r14 %#lx, r15 %#lx\n", frame->r12,
+				frame->r13, frame->r14, frame->r15);
 }
 
-static void default_exception_handler(struct thread_regs *frame)
+static void dump_backtrace(const struct thread_regs *frame)
+{
+	struct thread *thread = current();
+
+	if (!thread)
+		return;
+
+	const uintptr_t stack_begin = (uintptr_t)thread_stack_begin(thread);
+	const uintptr_t stack_end = (uintptr_t)thread_stack_end(thread);
+
+	puts("Backtrace:");
+	__backtrace(frame->rbp, stack_begin, stack_end);
+}
+
+static void default_exception_handler(const struct thread_regs *frame)
 {
 	static const char *error[] = {
 		"division error",
@@ -121,6 +139,7 @@ static void default_exception_handler(struct thread_regs *frame)
 
 	puts(error[frame->intno]);
 	dump_error_frame(frame);
+	dump_backtrace(frame);
 	while (1);
 }
 
@@ -150,6 +169,9 @@ void isr_common_handler(struct thread_regs *ctx)
 	if (irq)
 		irq(irqno);
 	unmask_irq(irqno);
+
+	if (need_resched())
+		schedule();
 }
 
 void register_irq_handler(int irq, irq_t isr)
@@ -187,8 +209,6 @@ void setup_ints(void)
 	idt_ptr.size = sizeof(idt) - 1;
 	idt_ptr.base = (uintptr_t)idt;
 	set_idt(&idt_ptr);
-
-	extern struct irqchip i8259a;
 
 	irqchip = &i8259a;
 	irqchip_map(irqchip, IDT_EXCEPTIONS);
