@@ -1,0 +1,38 @@
+\begin{frame}
+\frametitle{Отображение в память}
+\begin{itemize}
+  \item<1-> Page Cache находится в ядре и не доступен в userspace
+    \begin{itemize}
+      \item нам приходится копировать данные из/в userspace из
+            Page Cache;
+      \item такое копирование приводит к дублированию данных;
+      \item портит процессорный кеш;
+    \end{itemize}
+  \item<2-> Можем ли мы предоставить доступ к Page Cache из
+            userspace?
+    \begin{itemize}
+      \item на чтение - легко;
+      \item для записи нужно уметь отслеживать запись в страницу
+            из userspace;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Page Fault Again}
+\begin{itemize}
+  \item<1-> Для отображения файла в память существует вызов \emph{mmap}
+    \begin{itemize}
+      \item параметры: файловый дескриптор, смещение и размер;
+      \item на выходе получаем указатель на обычную память;
+      \item \emph{mmap} отображает часть виртуальной памяти
+            процесса на страницы в Page Cache;
+    \end{itemize}
+  \item<2-> Для отслеживания записей отображение должно быть Read Only
+    \begin{itemize}
+      \item в обработчике Page Fault разрешаем запись и помечаем страницу
+            в Page Cache как грязную;
+      \item после записи страницы делаем ее Read Only опять;
+    \end{itemize}
+\end{itemize}
+\end{frame}

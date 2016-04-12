@@ -1,0 +1,181 @@
+\begin{frame}
+\frametitle{Page Cache}
+\begin{itemize}
+  \item<1-> Пользователь, обычно, не обращается к диску - он обращается к файлу
+    \begin{itemize}
+      \item где и как этот файл располагается на диске не особо важно;
+      \item ФС использует Buffer Cache для ускорения работы с диском;
+    \end{itemize}
+  \item<2-> Зачем просить ФС делать лишнюю работу и искать нужный сектор диска?
+    \begin{itemize}
+      \item давайте кешировать доступ к файлам вместо доступа к диску;
+      \item в Linux Kernel это называется Page Cache (судя по всему название
+            пришло из SVR4);
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Page Cache в Linux Kernel}
+\begin{lstlisting}
+struct address_space {
+  struct inode                          *host;
+  struct radix_tree_root                page_tree;
+
+  spinlock_t                            tree_lock;
+  atomic_t                              i_mmap_writable;
+  struct rb_root                        i_mmap;
+  struct rw_semaphore                   i_mmap_rwsem;
+  unsigned long                         nrpages;
+  unsigned long                         nrexceptional;
+  pgoff_t                               writeback_index;
+
+  const struct address_space_operations *a_ops;
+
+  unsigned long                         flags;
+  spinlock_t                            private_lock;
+  struct list_head                      private_list;
+  void                                  *private_data;
+};
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Page Cache в Linux Kernel}
+\begin{lstlisting}
+struct address_space_operations {
+  int (*writepage)(struct page *page, struct writeback_control *wbc);
+  int (*readpage)(struct file *, struct page *);
+  int (*writepages)(struct address_space *, struct writeback_control *);
+
+  int (*set_page_dirty)(struct page *page);
+
+  int (*readpages)(struct file *filp, struct address_space *mapping,
+                   struct list_head *pages, unsigned nr_pages);
+
+  int (*write_begin)(struct file *, struct address_space *mapping,
+                     loff_t pos, unsigned len, unsigned flags,
+                     struct page **pagep, void **fsdata);
+  int (*write_end)(struct file *, struct address_space *mapping,
+                   loff_t pos, unsigned len, unsigned copied,
+                   struct page *page, void *fsdata);
+
+  ...
+};
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Откуда берутся address\_space\_operations?}
+\begin{itemize}
+  \item Их выставляет ФС при открытии файла:
+    \begin{itemize}
+      \item ядро алоцирует структуру \emph{struct inode};
+      \item \emph{struct address\_space} - поле этой структуры;
+      \item ФС заполняет \emph{struct inode} при открытии файла;
+   \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Чтение файла}
+\begin{lstlisting}
+static ssize_t do_generic_file_read(struct file *filp, loff_t *ppos,
+                                    struct iov_iter *iter, ...)
+{
+  ...
+  index = *ppos >> PAGE_CACHE_SHIFT;
+  ...
+  page = find_get_page(mapping, index);
+  ...
+  error = mapping->a_ops->readpage(filp, page);
+  ...
+  ret = copy_page_to_iter(page, offset, nr, iter);
+  ...
+}
+\end{lstlisting}
+\end{frame}
+
+\begin{frame}
+\frametitle{Запись файла}
+\begin{itemize}
+  \item В отличие от чтения, запись в файл более сложный процесс
+    \begin{itemize}
+      \item запись состоит из двух частей: запись в кеш и сброс кеша на диск;
+    \end{itemize}
+  \item \emph{write\_begin}/\emph{write\_end} и \emph{set\_page\_dirty}
+        используются в первой части - при записи в кеш;
+  \item \emph{writepage}/\emph{writepages} используются для записи страниц кеша
+        на диск;
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Запись файла}
+\begin{lstlisting}
+ssize_t generic_perform_write(struct file *file,
+                              struct iov_iter *i, loff_t pos)
+{
+  ...
+  status = a_ops->write_begin(file, mapping, pos, bytes, flags,
+                              &page, &fsdata);
+  ...
+  copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
+  ...
+  status = a_ops->write_end(file, mapping, pos, bytes, copied,
+                            page, fsdata);
+  ...
+}
+\end{lstlisting}
+\begin{itemize}
+  \item \emph{write\_begin} занимается подготовкой к записи:
+    \begin{itemize}
+      \item ищет/аллоцирует страницы в Page Cache;
+      \item читает данные - запрос на запись может быть не выровнен;
+    \end{itemize}
+  \item \emph{write\_end} освобождает ресурсы и обновляет метаданные;
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Запись файла}
+\begin{itemize}
+  \item<1-> Оставшаяся часть - запись страниц файла на диск:
+    \begin{itemize}
+      \item никакого секрета или хитрого трюка;
+      \item Linux Kernel честно поддерживает список "грязных" inode;
+      \item для каждого inode Page Cache отслеживает "грязные"
+            страницы;
+      \item для записи используется \emph{writepage} из
+            \emph{address\_space\_operations};
+    \end{itemize}
+  \item<2-> Запись страниц происходит:
+    \begin{itemize}
+      \item по требованию - sync;
+      \item по необходимости - мало памяти или много "грязных" страниц;
+      \item периодически - мы не хотим, чтобы данные долго оставались
+            "грязными" в кеше;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Последствия кеширования}
+\begin{itemize}
+  \item<1-> Важно закрывать файлы:
+    \begin{itemize}
+      \item это позволит сбросить буфер библиотеки, которую вы
+            используете;
+      \item это позволит освободить файловый дескриптор - их количество
+            ограничено;
+      \item это не гарантирует, что файлы записались на диск;
+    \end{itemize}
+  \item<2-> Как гарантировать, что все закешированные данные \emph{файла}
+            реально записались на диск?
+    \begin{itemize}
+      \item для этого есть два вызова \emph{fsync}/\emph{fdatasync};
+      \item если вы только создали файл, то даже это не поможет;
+      \item вам нужно также сделать \emph{fsync} на родительском каталоге;
+    \end{itemize}
+\end{itemize}
+\end{frame}
