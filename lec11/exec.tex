@@ -1,0 +1,141 @@
+\begin{frame}
+\frametitle{Исполняемые файлы}
+\begin{itemize}
+  \item<1-> Откуда берется код в userspace?
+    \begin{itemize}
+      \item этот код может быть скомпилирован вместе с кодом ядра ОС;
+      \item ядро ОС может загрузить этот код из файла;
+    \end{itemize}
+  \item<2-> Чтобы ОС могла загрузить исполняемый файл, он должен соответствовать определенному формату:
+    \begin{itemize}
+      \item формат определяет ОС, но есть несколько распространенных;
+      \item например, ELF, PE, Mach-O;
+      \item они похожи, но как всегда детали отличаются;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Исполняемые файлы}
+\begin{itemize}
+  \item Формат исполняемого файла должен предоставить следующую базовую информацию:
+    \begin{itemize}
+      \item какие части файла по каким адресам в памяти нужно положить;
+      \item какие участки памяти какими данными нужно заполнить;
+      \item по какому адресу передать управление (упрощенно, где в памяти \emph{main});
+      \item или указать на того, кто знает как работать с исполняемым файлом (например, добавить \#! и путь к интерпретатору в начало файла);
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Формат ELF}
+\begin{columns}[T]
+  \begin{column}{.5\linewidth}
+    \begin{lstlisting}
+struct elf_hdr {
+    uint8_t e_ident[ELF_NIDENT];
+    uint16_t e_type;
+    uint16_t e_machine;
+    uint32_t e_version;
+    uint64_t e_entry;
+    uint64_t e_phoff;
+    uint64_t e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize;
+    uint16_t e_phentsize;
+    uint16_t e_phnum;
+    uint16_t e_shentsize;
+    uint16_t e_shnum;
+    uint16_t e_shstrndx;
+} __attribute__((packed));
+    \end{lstlisting}
+  \end{column}
+  \begin{column}{.6\linewidth}
+    \begin{itemize}
+      \item \emph{ELF} файл начинается с заголовка с общей информацией;
+      \item тип, версия, архитектура - ОС должна проверить, что они соответствуют ее ожиданиям;
+      \item заголовок хранится адрес точки входа - \emph{e\_entry};
+    \end{itemize}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}
+\frametitle{Program Header}
+\begin{itemize}
+  \item<1-> \emph{Program Header}, упрощенно, описывает участок памяти, который должна подготовить ОС:
+    \begin{itemize}
+      \item некоторые из них ОС должна прочитать из файла и сохранить в памяти;
+      \item для некоторых просто должна быть выделена и инициализирована память;
+      \item некоторые имеют служебное значение и могут быть проигнорированы;
+    \end{itemize}
+  \item<2-> Заголовок указывает на таблицу \emph{Program Header}-ов:
+    \begin{itemize}
+      \item \emph{e\_phoff} - смещение таблицы в файле;
+      \item \emph{e\_phnum} - количество заголовков в таблице;
+      \item \emph{e\_phentsize} - размер одной записи;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Program Header}
+\begin{columns}[T]
+  \begin{column}{.5\linewidth}
+    \begin{lstlisting}
+struct elf_phdr {
+        uint32_t p_type;
+        uint32_t p_flags;
+        uint64_t p_offset;
+        uint64_t p_vaddr;
+        uint64_t p_paddr;
+        uint64_t p_filesz;
+        uint64_t p_memsz;
+        uint64_t p_align;
+} __attribute__((packed));
+    \end{lstlisting}
+  \end{column}
+  \begin{column}{.6\linewidth}
+    \begin{itemize}
+      \item \emph{p\_type} - тип заголовка, нас интересует только тип \emph{PT\_LOAD} (значение 1);
+      \item \emph{p\_vaddr} и \emph{p\_memsz} - адрес и размер в памяти;
+      \item \emph{p\_offset} и \emph{p\_filesz} - смещение и размер в файле;
+      \item \emph{p\_filesz} может быть меньше \emph{p\_memsz};
+    \end{itemize}
+  \end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}
+\frametitle{Загрузка ELF файла}
+\begin{itemize}
+  \item Проверяем заголовок:
+    \begin{itemize}
+      \item в \emph{e\_ident} хранятся магическая последовательность, класс и порядок байт;
+      \item правильная магическая последовательность: "\textbackslash x7f""ELF";
+      \item класс \emph{ELF\_CLASS64} (значение 2);
+      \item порядок байт \emph{ELF\_DATA2LSB} (значение 1);
+      \item кроме того полезно проверить поле \emph{e\_type}, там должно быть значение \emph{ELF\_EXEC} (значение 2);
+      \item подробности можно найти в спецификации \emph{ELF} и в \emph{ABI};
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Загрузка ELF файла}
+\begin{itemize}
+  \item<1-> Проходимся по \emph{Program Header}-ам и подготавливаем память:
+    \begin{itemize}
+      \item положение \emph{Program Header}-ов указано в заголовке, который мы проверили;
+      \item для каждого \emph{Program Header} с типом \emph{PT\_LOAD} нужно подготовить участок памяти по адресу \emph{p\_vaddr} размера \emph{p\_memsz};
+      \item в этот участок памяти нужно прочитать \emph{p\_filesz} байт из файла по смещению \emph{p\_offset};
+    \end{itemize}
+  \item<2-> Подготовка стека:
+    \begin{itemize}
+      \item зачастую выделять стек для процесса - задача ОС (это определяют создатели ОС);
+      \item обычно после загрузки приложению нужно передать какие-то параметры (командная строка, переменные окружения и прочее);
+      \item часто их просто копируют на стек, выделенный ОС;
+    \end{itemize}
+\end{itemize}
+\end{frame}
