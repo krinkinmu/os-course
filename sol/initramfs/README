@@ -1,0 +1,2 @@
+kernel expects top level directory in initramfs image to be "initramfs",
+there is no technical reason for that though.

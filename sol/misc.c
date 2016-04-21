@@ -26,6 +26,10 @@ struct mboot_mmap_entry {
 static void setup_memory_map(struct multiboot_info *info)
 {
 	DBG_ASSERT(info->flags & (1ul << 6));
+	if ((info->flags & (1ul << 6)) == 0) {
+		DBG_ERR("memory map info isn't available");
+		while (1);
+	}
 
 	const char *begin = (const char *)((uintptr_t)info->mmap_addr);
 	const char *end = begin + info->mmap_length;
@@ -53,6 +57,41 @@ static void setup_cmdline(const struct multiboot_info *info)
 	}
 }
 
+struct mboot_mod {
+	uint32_t mod_start;
+	uint32_t mod_end;
+	uint32_t string;
+	uint32_t reserved;
+} __attribute__((packed));
+
+static void setup_initrd(const struct multiboot_info *info)
+{
+	DBG_ASSERT(info->flags & (1ul << 3));
+	DBG_ASSERT(info->mods_count);
+
+	const struct mboot_mod *mods =
+			(const struct mboot_mod *)((uintptr_t)info->mods_addr);
+
+	for (int i = 0; i != (int)info->mods_count; ++i) {
+		const struct mboot_mod *mod = mods + i;
+
+		if (mod->mod_end - mod->mod_start < 6)
+			continue;
+
+		const void *ptr = (const void *)((uintptr_t)mod->mod_start);
+
+		if (memcmp(ptr, "070701", 6))
+			continue;
+
+		initrd_begin = mod->mod_start;
+		initrd_end = mod->mod_end;
+		return;
+	}
+
+	DBG_ASSERT(0 && "No initrd found!\n");
+	while (1);
+}
+
 void setup_misc(void)
 {
 	extern const uint32_t mboot_info;
@@ -61,4 +100,5 @@ void setup_misc(void)
 
 	setup_memory_map(pmboot_info);
 	setup_cmdline(pmboot_info);
+	setup_initrd(pmboot_info);
 }

@@ -1,12 +1,15 @@
 #include "kmem_cache.h"
 #include "interrupt.h"
+#include "initramfs.h"
 #include "threads.h"
 #include "memory.h"
 #include "serial.h"
 #include "paging.h"
 #include "stdio.h"
+#include "ramfs.h"
 #include "misc.h"
 #include "time.h"
+#include "vfs.h"
 
 static bool range_intersect(phys_t l0, phys_t r0, phys_t l1, phys_t r1)
 {
@@ -119,6 +122,9 @@ static int start_kernel(void *dummy)
 {
 	(void) dummy;
 
+	setup_ramfs();
+	setup_initramfs();
+
 	buddy_smoke_test();
 	slab_smoke_test();
 	test_threading();
@@ -137,7 +143,7 @@ void main(void)
 	setup_alloc();
 	setup_time();
 	setup_threading();
-	local_irq_enable();
+	setup_vfs();
 
 	create_kthread(&start_kernel, 0);
 	local_preempt_enable();

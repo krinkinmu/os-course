@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "kernel_config.h"
+
 #define CONTAINER_OF(ptr, type, member) \
 	(type *)( (char *)(ptr) - offsetof(type, member) )
 

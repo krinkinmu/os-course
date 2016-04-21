@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include "locking.h"
 #include "kernel.h"
 #include "memory.h"
 #include "balloc.h"
@@ -162,6 +163,7 @@ void setup_memory(void)
 	const phys_t kernel_end = (phys_t)bss_phys_end;
 
 	balloc_add_region(kernel_begin, kernel_end - kernel_begin);
+	balloc_add_region(initrd_begin, initrd_end - initrd_begin);
 
 	for (int i = 0; i != memory_map_size; ++i) {
 		const struct mmap_entry *entry = memory_map + i;
@@ -174,6 +176,11 @@ void setup_memory(void)
 			(unsigned long long) kernel_begin,
 			(unsigned long long) kernel_end - 1);
 	balloc_reserve_region(kernel_begin, kernel_end - kernel_begin);
+
+	printf("reserve memory range: %#llx-%#llx for initrd\n",
+			(unsigned long long) initrd_begin,
+			(unsigned long long) initrd_end - 1);
+	balloc_reserve_region(initrd_begin, initrd_end - initrd_begin);
 }
 
 void setup_buddy(void)
@@ -267,7 +274,9 @@ struct page *alloc_pages_node(int order, struct memory_node *node)
 {
 	const bool enabled = spin_lock_irqsave(&node->lock);
 	struct page * pages = __alloc_pages_node(order, node);
+
 	spin_unlock_irqrestore(&node->lock, enabled);
+
 	return pages;
 }
 
