@@ -10,6 +10,8 @@
 
 #define KERNEL_CODE       0x18
 #define KERNEL_DATA       0x20
+#define USER_CODE         0x2b
+#define USER_DATA         0x33
 
 #define KERNEL_PHYS(x)    ((x) - KERNEL_BASE)
 #define KERNEL_VIRT(x)    ((x) + KERNEL_BASE)
@@ -36,6 +38,22 @@ static inline phys_t pa(const void *addr)
 
 static inline void *va(phys_t addr)
 { return (void *)VA(addr); }
+
+struct gdt_ptr {
+	uint16_t size;
+	uint64_t addr;
+} __attribute__((packed));
+
+static inline void *get_gdt_ptr(void)
+{
+	struct gdt_ptr ptr;
+
+	__asm__("sgdt %0" : "=m"(ptr));
+	return (void *)ptr.addr
+}
+
+static inline void load_tr(unsigned short sel)
+{ __asm__("ltr %0" : : "a"(sel)); }
 
 #endif /*__ASM_FILE__*/
 
