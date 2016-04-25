@@ -1,0 +1,106 @@
+\begin{frame}
+\frametitle{x86 рушит наши планы}
+\begin{itemize}
+  \item<1-> В x86 есть несколько чувствительных непривелигированных инструкций
+    \begin{itemize}
+      \item например, инструкция \emph{SGDT} позволяет получить указатель на
+            \emph{GDT};
+      \item код ОС может считатывать и проверять значение указателя \emph{GDT};
+      \item код ОС может считать оттуда совсем не то, что она туда положила;
+    \end{itemize}
+  \item<2-> x86 довольно популярная платформа
+    \begin{itemize}
+      \item виртуализуемая или нет - мне надо!
+      \item в новых версиях x86 появилась поддержка эффективной виртуализации;
+      \item но и до появления этой поддержки компании VMWare удавалось довольно
+            эффективно виртуализовывать x86.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Бинарная трансляция}
+\begin{itemize}
+  \item<1-> Вернемся к старой и медленной симуляции
+    \begin{itemize}
+      \item зная, что \emph{guest} и \emph{host} используют одну архитектуру
+            мы можем довольно быстро "пофиксить код";
+      \item нам нужно найти в коде "опасные" инструкции и заменить их на вызовы
+            гиппервизора;
+    \end{itemize}
+  \item<2-> Как найти опасные инструкции?
+    \begin{itemize}
+      \item Как вообще найти код среди всей памяти в системе?
+      \item Что является кодом, что является данными определяется в момент
+            исполнения.
+      \item Мы знает точку входа, далее мы можем отслеживать куда передается
+            управление.
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Бинарная трансляция}
+\begin{itemize}
+  \item Транслятор работает с \emph{базовыми блоками}:
+    \begin{itemize}
+      \item базовый блок - линеная последовательность инструкций заканчивающаяся
+            инструкцией перехода;
+      \item трансляция базовго блока - замена "опасных" инструкций на вызов
+            \emph{VMM} и, возможно, вставка какого-то эпилога;
+      \item для каждого транслированого блока поддерживается его адрес и размер
+            в \emph{VM};
+      \item транслированные блоки можно кешировать;
+      \item транслировать код, выполняющийся в непривилигированном режиме,
+            обычно, не нужно;
+    \end{itemize}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]
+\frametitle{Пример}
+\begin{columns}[T]
+  \begin{column}{.4\linewidth}
+    \begin{lstlisting}
+    addl  $4,         %esp
+    movl  %cr0,       %eax
+    orl   $(1 << 31), %eax
+    movl  %eax, %cr0
+    pushl $enable_64bit_gdt
+    call  videomem_puts
+    \end{lstlisting}
+  \end{column}
+  \begin{column}{.4\linewidth}
+    \begin{lstlisting}
+    addl  $4,         %esp
+    call  trap_get_cr0
+    orl   $(1 << 31), %eax
+    pushl %eax
+    call  trap_set_cr0
+    pushl $enable_64bit_gdt
+    pushl $videomem_puts
+    call  back_to_vmm
+    \end{lstlisting}
+  \end{column}
+\end{columns}
+\begin{itemize}
+  \item В примере \emph{VMM} перехватывает операции с регистром \emph{\%cr0};
+  \item Инструкция перехода в конце транслируется в вызов \emph{VMM}
+\end{itemize}
+\end{frame}
+
+\begin{frame}
+\frametitle{Аппаратная поддержка виртуализации}
+\begin{itemize}
+  \item Intel-VT и AMD-V - расширения архитектуры для поддержки эффективной
+        виртуализации
+    \begin{itemize}
+      \item детали различаются, но обе технологии позволяют перехватывать
+            чувствительные инструкции;
+      \item первое поколение Intel-VT и AMD-V проигрывало по скорости бинарной
+            трансляции из-за большой стоимости передаи управления между
+            \emph{VMM} и ОС;
+      \item т. е. эффективная вирутализация оказалась не такой эффективной;
+    \end{itemize}
+\end{itemize}
+\end{frame}
