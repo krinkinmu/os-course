@@ -1,0 +1,5 @@
+*.d
+*.o
+*.swp
+image
+image.sym
